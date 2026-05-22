@@ -27,8 +27,51 @@ const albumData = [
 ]
 
 /* ================================================================
-   THREE.JS — background heart particles
+   THREE.JS — 3D Heart Particle Space Warp
    ================================================================ */
+
+// Generate a heart-shaped canvas texture
+function createHeartTexture() {
+  const size = 64
+  const c = document.createElement('canvas')
+  c.width = size
+  c.height = size
+  const ctx = c.getContext('2d')
+
+  ctx.translate(size / 2, size / 2 + 4)
+  const s = size / 28
+  ctx.beginPath()
+  ctx.moveTo(0, 2 * s)
+  ctx.bezierCurveTo(0, 5 * s, -8 * s, 10 * s, -12 * s, 10 * s)
+  ctx.bezierCurveTo(-16 * s, 10 * s, -16 * s, 6 * s, -16 * s, 5 * s)
+  ctx.bezierCurveTo(-16 * s, 1 * s, -12 * s, -3 * s, 0, -10 * s)
+  ctx.moveTo(0, 2 * s)
+  ctx.bezierCurveTo(0, 5 * s, 8 * s, 10 * s, 12 * s, 10 * s)
+  ctx.bezierCurveTo(16 * s, 10 * s, 16 * s, 6 * s, 16 * s, 5 * s)
+  ctx.bezierCurveTo(16 * s, 1 * s, 12 * s, -3 * s, 0, -10 * s)
+  ctx.closePath()
+
+  const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, 14 * s)
+  grad.addColorStop(0, 'rgba(255, 180, 210, 1)')
+  grad.addColorStop(0.6, 'rgba(255, 120, 180, 0.9)')
+  grad.addColorStop(1, 'rgba(200, 60, 120, 0.7)')
+  ctx.fillStyle = grad
+  ctx.fill()
+
+  // soft glow halo
+  ctx.beginPath()
+  ctx.arc(0, 0, 13 * s, 0, Math.PI * 2)
+  const halo = ctx.createRadialGradient(0, 0, 3 * s, 0, 0, 13 * s)
+  halo.addColorStop(0, 'rgba(255, 150, 200, 0.25)')
+  halo.addColorStop(1, 'rgba(255, 100, 160, 0)')
+  ctx.fillStyle = halo
+  ctx.fill()
+
+  const tex = new THREE.CanvasTexture(c)
+  tex.needsUpdate = true
+  return tex
+}
+
 function initBackground() {
   const canvas = document.getElementById('bg-canvas')
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true })
@@ -36,115 +79,73 @@ function initBackground() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 
   const scene = new THREE.Scene()
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000)
-  camera.position.z = 5
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 500)
+  camera.position.z = 2
 
-  const PARTICLE_COUNT = 600
-
-  // Heart curve function
-  function heartShape(t) {
-    const x = 16 * Math.pow(Math.sin(t), 3)
-    const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)
-    return { x: x / 17, y: y / 17 }
-  }
+  const PARTICLE_COUNT = 800
+  const heartTex = createHeartTexture()
 
   const positions = new Float32Array(PARTICLE_COUNT * 3)
-  const velocities = new Float32Array(PARTICLE_COUNT * 3)
   const colors = new Float32Array(PARTICLE_COUNT * 3)
   const sizes = new Float32Array(PARTICLE_COUNT)
+  const alphas = new Float32Array(PARTICLE_COUNT)
 
-  for (let i = 0; i < PARTICLE_COUNT; i++) {
+  // Spawn a single particle in the far Z
+  function spawnParticle(i) {
     const i3 = i * 3
-    // Random position in 3D space
-    positions[i3] = (Math.random() - 0.5) * 14
-    positions[i3 + 1] = (Math.random() - 0.5) * 10
-    positions[i3 + 2] = (Math.random() - 0.5) * 8
+    const spread = 12
+    positions[i3] = (Math.random() - 0.5) * spread
+    positions[i3 + 1] = (Math.random() - 0.5) * (spread * 0.7)
+    positions[i3 + 2] = -(40 + Math.random() * 60) // far away
 
-    // Slow upward drift
-    velocities[i3] = (Math.random() - 0.5) * 0.003
-    velocities[i3 + 1] = Math.random() * 0.004 + 0.001
-    velocities[i3 + 2] = (Math.random() - 0.5) * 0.002
-
-    // Pink / warm tones
-    const pinkness = 0.5 + Math.random() * 0.5
+    // warm pink tones
+    const pinkness = 0.6 + Math.random() * 0.4
     colors[i3] = 1.0
-    colors[i3 + 1] = 0.4 + pinkness * 0.4
-    colors[i3 + 2] = 0.6 + pinkness * 0.3
+    colors[i3 + 1] = 0.45 + pinkness * 0.35
+    colors[i3 + 2] = 0.55 + pinkness * 0.35
 
-    sizes[i] = Math.random() * 4 + 1.5
+    sizes[i] = 1.5 + Math.random() * 3.5
+    alphas[i] = 0.3 + Math.random() * 0.5
   }
+
+  for (let i = 0; i < PARTICLE_COUNT; i++) spawnParticle(i)
 
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
   geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1))
-
-  const vertexShader = `
-    attribute float size;
-    varying vec3 vColor;
-    void main() {
-      vColor = color;
-      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-      gl_PointSize = size * (200.0 / -mvPosition.z);
-      gl_Position = projectionMatrix * mvPosition;
-    }
-  `
-
-  const fragmentShader = `
-    varying vec3 vColor;
-    void main() {
-      float d = length(gl_PointCoord - vec2(0.5));
-      if (d > 0.5) discard;
-      float alpha = smoothstep(0.5, 0.15, d) * 0.6;
-      gl_FragColor = vec4(vColor, alpha);
-    }
-  `
+  geometry.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1))
 
   const material = new THREE.ShaderMaterial({
-    vertexShader,
-    fragmentShader,
-    vertexColors: true,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-  })
-
-  const points = new THREE.Points(geometry, material)
-  scene.add(points)
-
-  // Also add a few larger "glow" particles shaped as hearts
-  const glowCount = 30
-  const glowPositions = new Float32Array(glowCount * 3)
-  const glowColors = new Float32Array(glowCount * 3)
-  const glowSizes = new Float32Array(glowCount)
-
-  for (let i = 0; i < glowCount; i++) {
-    const i3 = i * 3
-    const t = (i / glowCount) * Math.PI * 2
-    const h = heartShape(t)
-    glowPositions[i3] = h.x * 3 + (Math.random() - 0.5) * 2
-    glowPositions[i3 + 1] = h.y * 3 + (Math.random() - 0.5) * 2
-    glowPositions[i3 + 2] = (Math.random() - 0.5) * 2
-    glowColors[i3] = 1.0
-    glowColors[i3 + 1] = 0.3
-    glowColors[i3 + 2] = 0.55
-    glowSizes[i] = Math.random() * 6 + 4
-  }
-
-  const glowGeo = new THREE.BufferGeometry()
-  glowGeo.setAttribute('position', new THREE.BufferAttribute(glowPositions, 3))
-  glowGeo.setAttribute('color', new THREE.BufferAttribute(glowColors, 3))
-  glowGeo.setAttribute('size', new THREE.BufferAttribute(glowSizes, 1))
-
-  const glowMat = new THREE.ShaderMaterial({
-    vertexShader,
-    fragmentShader: `
+    uniforms: { uTexture: { value: heartTex } },
+    vertexShader: `
+      attribute float size;
+      attribute float alpha;
       varying vec3 vColor;
+      varying float vAlpha;
+      varying float vDepth;
       void main() {
-        float d = length(gl_PointCoord - vec2(0.5));
-        if (d > 0.5) discard;
-        float alpha = smoothstep(0.5, 0.0, d) * 0.35;
-        gl_FragColor = vec4(vColor, alpha);
+        vColor = color;
+        vAlpha = alpha;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        vDepth = -mvPosition.z;
+        gl_PointSize = size * (180.0 / -mvPosition.z);
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D uTexture;
+      varying vec3 vColor;
+      varying float vAlpha;
+      varying float vDepth;
+      void main() {
+        vec4 tex = texture2D(uTexture, gl_PointCoord);
+        // depth-of-field: blur edges for very near / very far particles
+        float dofFactor = smoothstep(2.0, 8.0, vDepth) * (1.0 - smoothstep(30.0, 50.0, vDepth));
+        tex.a *= dofFactor;
+        tex.a *= vAlpha;
+        if (tex.a < 0.01) discard;
+        gl_FragColor = vec4(vColor * tex.rgb, tex.a);
       }
     `,
     vertexColors: true,
@@ -153,8 +154,8 @@ function initBackground() {
     blending: THREE.AdditiveBlending,
   })
 
-  const glowPoints = new THREE.Points(glowGeo, glowMat)
-  scene.add(glowPoints)
+  const points = new THREE.Points(geometry, material)
+  scene.add(points)
 
   // Mouse tracking for subtle parallax
   let mouseX = 0, mouseY = 0
@@ -166,25 +167,28 @@ function initBackground() {
   function animate() {
     requestAnimationFrame(animate)
     const posArr = geometry.attributes.position.array
+    const speed = 0.35 // toward camera
+
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const i3 = i * 3
-      posArr[i3] += velocities[i3]
-      posArr[i3 + 1] += velocities[i3 + 1]
-      posArr[i3 + 2] += velocities[i3 + 2]
-      // Wrap around
-      if (posArr[i3 + 1] > 6) posArr[i3 + 1] = -6
-      if (posArr[i3] > 8) posArr[i3] = -8
-      if (posArr[i3] < -8) posArr[i3] = 8
+      posArr[i3 + 2] += speed
+
+      // slight horizontal sway
+      posArr[i3] += Math.sin(posArr[i3 + 2] * 0.1 + i) * 0.008
+      posArr[i3 + 1] += Math.cos(posArr[i3 + 2] * 0.08 + i * 0.5) * 0.005
+
+      // passed the camera — respawn
+      if (posArr[i3 + 2] > camera.position.z + 2) {
+        spawnParticle(i)
+      }
     }
     geometry.attributes.position.needsUpdate = true
-
-    // Rotate glow
-    glowPoints.rotation.y += 0.0008
-    glowPoints.rotation.x += 0.0003
+    geometry.attributes.size.needsUpdate = true
+    geometry.attributes.alpha.needsUpdate = true
 
     // Parallax
-    camera.position.x += (mouseX * 0.5 - camera.position.x) * 0.02
-    camera.position.y += (-mouseY * 0.3 - camera.position.y) * 0.02
+    camera.position.x += (mouseX * 0.4 - camera.position.x) * 0.02
+    camera.position.y += (-mouseY * 0.25 - camera.position.y) * 0.02
     camera.lookAt(0, 0, 0)
 
     renderer.render(scene, camera)
@@ -489,23 +493,26 @@ function stopAutoRotate() {
 const AUTO_PLAY_LAYOUTS = ['arrival', 'cross', 'gather', 'fan', 'spiral', 'depart', 'wave', 'dna', 'sphere']
 let autoPlayTimer = null
 let autoPlayIndex = 0
+let autoPlayWasActive = false  // remember if autoplay was on before modal
+
+function autoPlayTick() {
+  autoPlayIndex = (autoPlayIndex + 1) % AUTO_PLAY_LAYOUTS.length
+  const layout = AUTO_PLAY_LAYOUTS[autoPlayIndex]
+  applyLayout(layout)
+  if (layout === 'depart') {
+    startAutoRotate()
+  } else {
+    stopAutoRotate()
+  }
+}
 
 function startAutoPlay() {
   stopAutoPlay()
   const btn = document.getElementById('auto-play-btn')
   btn.classList.add('playing')
   btn.textContent = '暂停'
-
-  autoPlayTimer = setInterval(() => {
-    autoPlayIndex = (autoPlayIndex + 1) % AUTO_PLAY_LAYOUTS.length
-    const layout = AUTO_PLAY_LAYOUTS[autoPlayIndex]
-    applyLayout(layout)
-    if (layout === 'depart') {
-      startAutoRotate()
-    } else {
-      stopAutoRotate()
-    }
-  }, 5000)
+  autoPlayTick() // advance immediately on start
+  autoPlayTimer = setInterval(autoPlayTick, 2000)
 }
 
 function stopAutoPlay() {
@@ -520,6 +527,10 @@ function stopAutoPlay() {
 
 /* ── Modal ──────────────────────────────────── */
 function openModal(item) {
+  // pause auto-play while modal is open
+  autoPlayWasActive = !!autoPlayTimer
+  if (autoPlayWasActive) stopAutoPlay()
+
   const overlay = document.getElementById('modal-overlay')
   document.getElementById('modal-img').src = item.src
   document.getElementById('modal-caption').textContent = item.caption
@@ -528,6 +539,8 @@ function openModal(item) {
 
 function closeModal() {
   document.getElementById('modal-overlay').classList.add('hidden')
+  // resume auto-play if it was active before
+  if (autoPlayWasActive) startAutoPlay()
 }
 
 document.getElementById('modal-close').addEventListener('click', closeModal)
