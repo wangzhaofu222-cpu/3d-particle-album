@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Particle Album</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <canvas id="bg-canvas"></canvas>
+  <div id="cards-container"></div>
+
+  <!-- Layout switcher -->
+  <nav id="layout-bar">
+    <button data-layout="arrival" class="active">散落</button>
+    <button data-layout="cross">十字</button>
+    <button data-layout="gather">聚拢</button>
+    <button data-layout="fan">扇形</button>
+    <button data-layout="spiral">螺旋</button>
+    <button data-layout="depart">圆环</button>
+  </nav>
+
+  <!-- Modal -->
+  <div id="modal-overlay" class="hidden">
+    <div id="modal-card">
+      <img id="modal-img" src="" alt="" />
+      <div id="modal-caption"></div>
+      <button id="modal-close">&times;</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
