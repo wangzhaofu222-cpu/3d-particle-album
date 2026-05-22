@@ -110,6 +110,30 @@ html, body {
   box-shadow: 0 0 12px rgba(255, 120, 180, 0.3);
 }
 
+.bar-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(255, 120, 180, 0.25);
+  align-self: center;
+  margin: 0 4px;
+}
+
+#auto-play-btn {
+  color: #bbb !important;
+}
+
+#auto-play-btn.playing {
+  color: #fff !important;
+  background: rgba(100, 255, 160, 0.25) !important;
+  box-shadow: 0 0 12px rgba(100, 255, 160, 0.3);
+  animation: pulse-glow 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 12px rgba(100, 255, 160, 0.2); }
+  50% { box-shadow: 0 0 20px rgba(100, 255, 160, 0.5); }
+}
+
 /* ── Modal ─────────────────────────────────── */
 #modal-overlay {
   position: fixed;

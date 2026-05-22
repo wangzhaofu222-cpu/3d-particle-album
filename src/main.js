@@ -256,19 +256,20 @@ function layoutCross(cards, w, h) {
   const cx = w / 2 - CARD_W / 2
   const cy = h / 2 - CARD_H / 2
   const half = Math.floor(cards.length / 2)
+  const vertCount = cards.length - half
+
+  // Horizontal arm — use a spacing that fits in the viewport
+  const hSpacing = Math.min(CARD_W + CARD_GAP, (w - 120) / half)
+  const vSpacing = Math.min(CARD_H + CARD_GAP, (h - 120) / vertCount)
+
   return cards.map((_, i) => {
     if (i < half) {
-      // Horizontal arm
-      const spacing = CARD_W + CARD_GAP
-      const startX = cx - ((half - 1) * spacing) / 2
-      return { x: startX + i * spacing, y: cy, z: 0, rotY: 0, rotX: 0, rotZ: 0 }
+      const startX = cx - ((half - 1) * hSpacing) / 2
+      return { x: startX + i * hSpacing, y: cy, z: 0, rotY: 0, rotX: 0, rotZ: 0 }
     } else {
-      // Vertical arm
       const vi = i - half
-      const vertCount = cards.length - half
-      const spacing = CARD_H + CARD_GAP
-      const startY = cy - ((vertCount - 1) * spacing) / 2
-      return { x: cx, y: startY + vi * spacing, z: vi * 15, rotY: 10, rotX: 0, rotZ: 0 }
+      const startY = cy - ((vertCount - 1) * vSpacing) / 2
+      return { x: cx, y: startY + vi * vSpacing, z: vi * 12, rotY: 10, rotX: 0, rotZ: 0 }
     }
   })
 }
@@ -288,18 +289,18 @@ function layoutGather(cards, w, h) {
 
 function layoutFan(cards, w, h) {
   const cx = w / 2 - CARD_W / 2
-  const baseY = h - CARD_H - 60
+  const cy = h / 2 - CARD_H / 2
   const totalAngle = Math.min(cards.length * 8, 140)
   const startAngle = -totalAngle / 2
   const angleStep = cards.length > 1 ? totalAngle / (cards.length - 1) : 0
-  const radius = 320
+  const radius = 280
 
   return cards.map((_, i) => {
     const angle = startAngle + i * angleStep
     const rad = (angle * Math.PI) / 180
     return {
       x: cx + Math.sin(rad) * radius,
-      y: baseY - Math.cos(rad) * radius + radius,
+      y: cy - Math.cos(rad) * radius + radius,
       z: Math.sin(rad) * 100,
       rotY: 0,
       rotX: 0,
@@ -347,6 +348,74 @@ function layoutDepart(cards, w, h) {
   })
 }
 
+/* ── New layouts ────────────────────────────── */
+
+function layoutWave(cards, w, h) {
+  const cx = w / 2 - CARD_W / 2
+  const cy = h / 2 - CARD_H / 2
+  const totalW = cards.length * (CARD_W + CARD_GAP)
+  const startX = cx - totalW / 2 + CARD_W / 2
+  const ampY = 120
+  const ampZ = 160
+
+  return cards.map((_, i) => {
+    const phase = (i / cards.length) * Math.PI * 3
+    return {
+      x: startX + i * (CARD_W + CARD_GAP),
+      y: cy + Math.sin(phase) * ampY,
+      z: Math.cos(phase) * ampZ,
+      rotY: 0,
+      rotX: Math.sin(phase) * 12,
+      rotZ: Math.cos(phase) * 6,
+    }
+  })
+}
+
+function layoutDNA(cards, w, h) {
+  const cx = w / 2 - CARD_W / 2
+  const cy = h / 2 - CARD_H / 2
+  const turns = 2
+  const heightRange = h * 0.65
+  const helixRadius = 140
+
+  return cards.map((_, i) => {
+    const t = i / (cards.length - 1 || 1)
+    const angle = t * turns * Math.PI * 2
+    const strand = i % 2
+    const offsetAngle = angle + strand * Math.PI
+    return {
+      x: cx + Math.cos(offsetAngle) * helixRadius,
+      y: cy + heightRange / 2 - t * heightRange,
+      z: Math.sin(offsetAngle) * helixRadius,
+      rotY: -(offsetAngle * 180) / Math.PI,
+      rotX: 0,
+      rotZ: 0,
+    }
+  })
+}
+
+function layoutSphere(cards, w, h) {
+  const cx = w / 2 - CARD_W / 2
+  const cy = h / 2 - CARD_H / 2
+  const radius = 260
+  const n = cards.length
+
+  return cards.map((_, i) => {
+    // Fibonacci sphere distribution for even spacing
+    const golden = (1 + Math.sqrt(5)) / 2
+    const theta = Math.acos(1 - 2 * (i + 0.5) / n)
+    const phi = 2 * Math.PI * i / golden
+    return {
+      x: cx + radius * Math.sin(theta) * Math.cos(phi),
+      y: cy + radius * Math.cos(theta),
+      z: radius * Math.sin(theta) * Math.sin(phi),
+      rotY: -(phi * 180) / Math.PI,
+      rotX: (theta * 180) / Math.PI - 90,
+      rotZ: 0,
+    }
+  })
+}
+
 const LAYOUTS = {
   arrival: layoutArrival,
   cross: layoutCross,
@@ -354,6 +423,9 @@ const LAYOUTS = {
   fan: layoutFan,
   spiral: layoutSpiral,
   depart: layoutDepart,
+  wave: layoutWave,
+  dna: layoutDNA,
+  sphere: layoutSphere,
 }
 
 function applyLayout(name) {
@@ -367,12 +439,11 @@ function applyLayout(name) {
 
   cards.forEach(({ el }, i) => {
     const p = positions[i]
-    // Small randomisation for arrival so it looks fresh each time
     gsap.to(el, {
       left: p.x,
       top: p.y,
       duration: 1.0,
-      ease: 'power3.inOut',
+      ease: 'power2.inOut',
       delay: i * 0.03,
     })
 
@@ -382,7 +453,7 @@ function applyLayout(name) {
       rotateZ: p.rotZ,
       z: p.z,
       duration: 1.0,
-      ease: 'power3.inOut',
+      ease: 'power2.inOut',
       delay: i * 0.03,
     })
   })
@@ -414,6 +485,39 @@ function stopAutoRotate() {
   gsap.set('#cards-container', { rotateY: 0 })
 }
 
+/* ── Auto-play ──────────────────────────────── */
+const AUTO_PLAY_LAYOUTS = ['arrival', 'cross', 'gather', 'fan', 'spiral', 'depart', 'wave', 'dna', 'sphere']
+let autoPlayTimer = null
+let autoPlayIndex = 0
+
+function startAutoPlay() {
+  stopAutoPlay()
+  const btn = document.getElementById('auto-play-btn')
+  btn.classList.add('playing')
+  btn.textContent = '暂停'
+
+  autoPlayTimer = setInterval(() => {
+    autoPlayIndex = (autoPlayIndex + 1) % AUTO_PLAY_LAYOUTS.length
+    const layout = AUTO_PLAY_LAYOUTS[autoPlayIndex]
+    applyLayout(layout)
+    if (layout === 'depart') {
+      startAutoRotate()
+    } else {
+      stopAutoRotate()
+    }
+  }, 5000)
+}
+
+function stopAutoPlay() {
+  if (autoPlayTimer) {
+    clearInterval(autoPlayTimer)
+    autoPlayTimer = null
+  }
+  const btn = document.getElementById('auto-play-btn')
+  btn.classList.remove('playing')
+  btn.textContent = '自动播放'
+}
+
 /* ── Modal ──────────────────────────────────── */
 function openModal(item) {
   const overlay = document.getElementById('modal-overlay')
@@ -440,22 +544,30 @@ function init() {
   createCards()
 
   // Layout buttons
-  document.querySelectorAll('#layout-bar button').forEach((btn) => {
+  document.querySelectorAll('#layout-bar button[data-layout]').forEach((btn) => {
     btn.addEventListener('click', () => {
+      stopAutoPlay()
       const layout = btn.dataset.layout
       if (layout === 'arrival') {
-        // Re-randomise
         applyLayout('arrival')
       } else {
         applyLayout(layout)
       }
-
       if (layout === 'depart') {
         startAutoRotate()
       } else {
         stopAutoRotate()
       }
     })
+  })
+
+  // Auto-play button
+  document.getElementById('auto-play-btn').addEventListener('click', () => {
+    if (autoPlayTimer) {
+      stopAutoPlay()
+    } else {
+      startAutoPlay()
+    }
   })
 
   // Initial layout
