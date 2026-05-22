@@ -27,46 +27,64 @@ const albumData = [
 ]
 
 /* ================================================================
-   THREE.JS — 3D Heart Particle Space Warp
+   THREE.JS — 3D Heart Stream: Galaxy Ribbon Flow
    ================================================================ */
 
-// Generate a heart-shaped canvas texture
+// Soft radial glow texture (used as particle sprite)
+function createGlowTexture() {
+  const size = 64
+  const c = document.createElement('canvas')
+  c.width = size
+  c.height = size
+  const ctx = c.getContext('2d')
+  const r = size / 2
+  const grad = ctx.createRadialGradient(r, r, 0, r, r, r)
+  grad.addColorStop(0, 'rgba(255, 220, 235, 1)')
+  grad.addColorStop(0.25, 'rgba(255, 170, 205, 0.8)')
+  grad.addColorStop(0.55, 'rgba(255, 130, 185, 0.35)')
+  grad.addColorStop(1, 'rgba(255, 100, 170, 0)')
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, size, size)
+  const tex = new THREE.CanvasTexture(c)
+  tex.needsUpdate = true
+  return tex
+}
+
+// Heart outline texture (delicate line heart)
 function createHeartTexture() {
   const size = 64
   const c = document.createElement('canvas')
   c.width = size
   c.height = size
   const ctx = c.getContext('2d')
-
-  ctx.translate(size / 2, size / 2 + 4)
-  const s = size / 28
+  const r = size / 2
+  // soft glow background
+  const bg = ctx.createRadialGradient(r, r, 0, r, r, r)
+  bg.addColorStop(0, 'rgba(255, 200, 220, 0.5)')
+  bg.addColorStop(1, 'rgba(255, 100, 160, 0)')
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, size, size)
+  // draw heart shape
+  ctx.save()
+  ctx.translate(r, r + 3)
+  const s = size / 30
   ctx.beginPath()
   ctx.moveTo(0, 2 * s)
   ctx.bezierCurveTo(0, 5 * s, -8 * s, 10 * s, -12 * s, 10 * s)
-  ctx.bezierCurveTo(-16 * s, 10 * s, -16 * s, 6 * s, -16 * s, 5 * s)
-  ctx.bezierCurveTo(-16 * s, 1 * s, -12 * s, -3 * s, 0, -10 * s)
+  ctx.bezierCurveTo(-15 * s, 10 * s, -15 * s, 6 * s, -15 * s, 5 * s)
+  ctx.bezierCurveTo(-15 * s, 1 * s, -11 * s, -3 * s, 0, -9 * s)
   ctx.moveTo(0, 2 * s)
   ctx.bezierCurveTo(0, 5 * s, 8 * s, 10 * s, 12 * s, 10 * s)
-  ctx.bezierCurveTo(16 * s, 10 * s, 16 * s, 6 * s, 16 * s, 5 * s)
-  ctx.bezierCurveTo(16 * s, 1 * s, 12 * s, -3 * s, 0, -10 * s)
+  ctx.bezierCurveTo(15 * s, 10 * s, 15 * s, 6 * s, 15 * s, 5 * s)
+  ctx.bezierCurveTo(15 * s, 1 * s, 11 * s, -3 * s, 0, -9 * s)
   ctx.closePath()
-
-  const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, 14 * s)
-  grad.addColorStop(0, 'rgba(255, 180, 210, 1)')
-  grad.addColorStop(0.6, 'rgba(255, 120, 180, 0.9)')
-  grad.addColorStop(1, 'rgba(200, 60, 120, 0.7)')
+  const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, 12 * s)
+  grad.addColorStop(0, 'rgba(255, 210, 230, 1)')
+  grad.addColorStop(0.7, 'rgba(255, 160, 200, 0.85)')
+  grad.addColorStop(1, 'rgba(255, 120, 180, 0.5)')
   ctx.fillStyle = grad
   ctx.fill()
-
-  // soft glow halo
-  ctx.beginPath()
-  ctx.arc(0, 0, 13 * s, 0, Math.PI * 2)
-  const halo = ctx.createRadialGradient(0, 0, 3 * s, 0, 0, 13 * s)
-  halo.addColorStop(0, 'rgba(255, 150, 200, 0.25)')
-  halo.addColorStop(1, 'rgba(255, 100, 160, 0)')
-  ctx.fillStyle = halo
-  ctx.fill()
-
+  ctx.restore()
   const tex = new THREE.CanvasTexture(c)
   tex.needsUpdate = true
   return tex
@@ -79,60 +97,120 @@ function initBackground() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 
   const scene = new THREE.Scene()
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 500)
-  camera.position.z = 2
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 300)
+  camera.position.z = 3
 
-  const PARTICLE_COUNT = 800
+  const PARTICLE_COUNT = 1200
+  const glowTex = createGlowTexture()
   const heartTex = createHeartTexture()
 
-  const positions = new Float32Array(PARTICLE_COUNT * 3)
-  const colors = new Float32Array(PARTICLE_COUNT * 3)
-  const sizes = new Float32Array(PARTICLE_COUNT)
-  const alphas = new Float32Array(PARTICLE_COUNT)
+  // Each particle has: position, color, size, alpha, phase offset, stream index
+  const posArr = new Float32Array(PARTICLE_COUNT * 3)
+  const colArr = new Float32Array(PARTICLE_COUNT * 3)
+  const sizeArr = new Float32Array(PARTICLE_COUNT)
+  const alphaArr = new Float32Array(PARTICLE_COUNT)
+  const phaseArr = new Float32Array(PARTICLE_COUNT)    // random phase for variety
+  const streamArr = new Float32Array(PARTICLE_COUNT)   // which stream ribbon
 
-  // Spawn a single particle in the far Z
-  function spawnParticle(i) {
+  const STREAM_COUNT = 5 // number of parallel ribbon streams
+
+  // Place a particle along the stream at a given Z with stream offset
+  function placeParticle(i, zPos) {
     const i3 = i * 3
-    const spread = 12
-    positions[i3] = (Math.random() - 0.5) * spread
-    positions[i3 + 1] = (Math.random() - 0.5) * (spread * 0.7)
-    positions[i3 + 2] = -(40 + Math.random() * 60) // far away
+    const stream = streamArr[i]
+    const phase = phaseArr[i]
 
-    // warm pink tones
-    const pinkness = 0.6 + Math.random() * 0.4
-    colors[i3] = 1.0
-    colors[i3 + 1] = 0.45 + pinkness * 0.35
-    colors[i3 + 2] = 0.55 + pinkness * 0.35
+    // S-curve ribbon: gentle sinusoidal path along Z
+    const ribbonCenterX = Math.sin(zPos * 0.035 + stream * 1.8) * 2.5
+    const ribbonCenterY = Math.cos(zPos * 0.028 + stream * 2.2) * 1.8
 
-    sizes[i] = 1.5 + Math.random() * 3.5
-    alphas[i] = 0.3 + Math.random() * 0.5
+    // Scatter particles around the ribbon center
+    const scatterR = 1.2 + Math.abs(Math.sin(phase * 17)) * 0.8
+    const angle = phase * Math.PI * 2
+    const offsetX = Math.cos(angle) * scatterR
+    const offsetY = Math.sin(angle) * scatterR * 0.6
+
+    posArr[i3] = ribbonCenterX + offsetX
+    posArr[i3 + 1] = ribbonCenterY + offsetY
+    posArr[i3 + 2] = zPos
+  }
+
+  // Spawn one particle at far Z
+  function spawnParticle(i) {
+    streamArr[i] = Math.floor(Math.random() * STREAM_COUNT)
+    phaseArr[i] = Math.random()
+
+    const zFar = -(50 + Math.random() * 80)
+    placeParticle(i, zFar)
+
+    // soft warm pink — low saturation, not garish
+    const warmth = 0.55 + Math.random() * 0.45
+    colArr[i * 3] = 1.0
+    colArr[i * 3 + 1] = 0.6 + warmth * 0.3
+    colArr[i * 3 + 2] = 0.72 + warmth * 0.2
+
+    sizeArr[i] = 0.8 + Math.random() * 2.5
+    alphaArr[i] = 0.15 + Math.random() * 0.4
   }
 
   for (let i = 0; i < PARTICLE_COUNT; i++) spawnParticle(i)
 
   const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-  geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1))
-  geometry.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1))
+  geometry.setAttribute('position', new THREE.BufferAttribute(posArr, 3))
+  geometry.setAttribute('color', new THREE.BufferAttribute(colArr, 3))
+  geometry.setAttribute('size', new THREE.BufferAttribute(sizeArr, 1))
+  geometry.setAttribute('alpha', new THREE.BufferAttribute(alphaArr, 1))
+
+  // Vertex shader passes depth for DOF
+  const vertexShader = `
+    attribute float size;
+    attribute float alpha;
+    varying vec3 vColor;
+    varying float vAlpha;
+    varying float vDepth;
+    void main() {
+      vColor = color;
+      vAlpha = alpha;
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      vDepth = -mv.z;
+      gl_PointSize = size * (150.0 / -mv.z);
+      gl_Position = projectionMatrix * mv;
+    }
+  `
+
+  // Fragment shader: sample texture, apply DOF blur via alpha falloff
+  const fragmentShader = `
+    uniform sampler2D uTexture;
+    varying vec3 vColor;
+    varying float vAlpha;
+    varying float vDepth;
+    void main() {
+      vec4 tex = texture2D(uTexture, gl_PointCoord);
+      // DOF: visible band 5-40, faded at extremes
+      float nearFade = smoothstep(1.5, 6.0, vDepth);
+      float farFade = 1.0 - smoothstep(35.0, 60.0, vDepth);
+      float dof = nearFade * farFade;
+      tex.a *= dof * vAlpha;
+      if (tex.a < 0.005) discard;
+      // additive: multiply color by alpha so overlapping = brighter (white-hot)
+      gl_FragColor = vec4(vColor * tex.rgb * tex.a, tex.a);
+    }
+  `
 
   const material = new THREE.ShaderMaterial({
+    uniforms: { uTexture: { value: glowTex } },
+    vertexShader,
+    fragmentShader,
+    vertexColors: true,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  })
+
+  // Second material for heart particles (mixed in)
+  const heartMaterial = new THREE.ShaderMaterial({
     uniforms: { uTexture: { value: heartTex } },
-    vertexShader: `
-      attribute float size;
-      attribute float alpha;
-      varying vec3 vColor;
-      varying float vAlpha;
-      varying float vDepth;
-      void main() {
-        vColor = color;
-        vAlpha = alpha;
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        vDepth = -mvPosition.z;
-        gl_PointSize = size * (180.0 / -mvPosition.z);
-        gl_Position = projectionMatrix * mvPosition;
-      }
-    `,
+    vertexShader,
     fragmentShader: `
       uniform sampler2D uTexture;
       varying vec3 vColor;
@@ -140,12 +218,12 @@ function initBackground() {
       varying float vDepth;
       void main() {
         vec4 tex = texture2D(uTexture, gl_PointCoord);
-        // depth-of-field: blur edges for very near / very far particles
-        float dofFactor = smoothstep(2.0, 8.0, vDepth) * (1.0 - smoothstep(30.0, 50.0, vDepth));
-        tex.a *= dofFactor;
-        tex.a *= vAlpha;
-        if (tex.a < 0.01) discard;
-        gl_FragColor = vec4(vColor * tex.rgb, tex.a);
+        float nearFade = smoothstep(2.0, 7.0, vDepth);
+        float farFade = 1.0 - smoothstep(30.0, 55.0, vDepth);
+        float dof = nearFade * farFade;
+        tex.a *= dof * vAlpha;
+        if (tex.a < 0.005) discard;
+        gl_FragColor = vec4(vColor * tex.rgb * tex.a, tex.a);
       }
     `,
     vertexColors: true,
@@ -154,41 +232,85 @@ function initBackground() {
     blending: THREE.AdditiveBlending,
   })
 
-  const points = new THREE.Points(geometry, material)
-  scene.add(points)
+  // Split particles: first 800 are glow dots, last 400 are hearts
+  const glowGeo = new THREE.BufferGeometry()
+  const heartGeo = new THREE.BufferGeometry()
 
-  // Mouse tracking for subtle parallax
+  // Shared attributes — both geos reference the same arrays
+  for (const geo of [glowGeo, heartGeo]) {
+    geo.setAttribute('position', new THREE.BufferAttribute(posArr, 3))
+    geo.setAttribute('color', new THREE.BufferAttribute(colArr, 3))
+    geo.setAttribute('size', new THREE.BufferAttribute(sizeArr, 1))
+    geo.setAttribute('alpha', new THREE.BufferAttribute(alphaArr, 1))
+  }
+
+  // Draw ranges: glow particles 0..799, heart particles 800..1199
+  glowGeo.setDrawRange(0, 800)
+  heartGeo.setDrawRange(800, 400)
+
+  const glowPoints = new THREE.Points(glowGeo, material)
+  const heartPoints = new THREE.Points(heartGeo, heartMaterial)
+  scene.add(glowPoints)
+  scene.add(heartPoints)
+
+  // Slow global rotation for organic feel
+  const group = new THREE.Group()
+  scene.remove(glowPoints)
+  scene.remove(heartPoints)
+  group.add(glowPoints)
+  group.add(heartPoints)
+  scene.add(group)
+
+  // Mouse parallax
   let mouseX = 0, mouseY = 0
   window.addEventListener('mousemove', (e) => {
     mouseX = (e.clientX / window.innerWidth - 0.5) * 2
     mouseY = (e.clientY / window.innerHeight - 0.5) * 2
   })
 
+  let time = 0
   function animate() {
     requestAnimationFrame(animate)
-    const posArr = geometry.attributes.position.array
-    const speed = 0.35 // toward camera
+    time += 0.005
 
+    // Advance all particles along Z toward camera
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const i3 = i * 3
+      const z = posArr[i3 + 2]
+
+      // Speed varies by depth: far = slow, near = faster
+      const depthNorm = 1.0 - (Math.abs(z) / 130) // 0=far, 1=near
+      const speed = 0.06 + depthNorm * 0.22
       posArr[i3 + 2] += speed
 
-      // slight horizontal sway
-      posArr[i3] += Math.sin(posArr[i3 + 2] * 0.1 + i) * 0.008
-      posArr[i3 + 1] += Math.cos(posArr[i3 + 2] * 0.08 + i * 0.5) * 0.005
+      // Gently follow ribbon as it moves forward
+      const newZ = posArr[i3 + 2]
+      const stream = streamArr[i]
+      const phase = phaseArr[i]
+      const targetX = Math.sin(newZ * 0.035 + stream * 1.8) * 2.5
+      const targetY = Math.cos(newZ * 0.028 + stream * 2.2) * 1.8
+      const scatterR = 1.2 + Math.abs(Math.sin(phase * 17)) * 0.8
+      const angle = phase * Math.PI * 2
+      posArr[i3] += (targetX + Math.cos(angle) * scatterR - posArr[i3]) * 0.015
+      posArr[i3 + 1] += (targetY + Math.sin(angle) * scatterR * 0.6 - posArr[i3 + 1]) * 0.015
 
-      // passed the camera — respawn
-      if (posArr[i3 + 2] > camera.position.z + 2) {
+      // Passed camera — respawn
+      if (newZ > camera.position.z + 3) {
         spawnParticle(i)
       }
     }
-    geometry.attributes.position.needsUpdate = true
-    geometry.attributes.size.needsUpdate = true
-    geometry.attributes.alpha.needsUpdate = true
 
-    // Parallax
-    camera.position.x += (mouseX * 0.4 - camera.position.x) * 0.02
-    camera.position.y += (-mouseY * 0.25 - camera.position.y) * 0.02
+    geometry.attributes.position.needsUpdate = true
+    glowGeo.attributes.position.needsUpdate = true
+    heartGeo.attributes.position.needsUpdate = true
+
+    // Very slow group rotation for organic drift
+    group.rotation.y = Math.sin(time * 0.3) * 0.04
+    group.rotation.x = Math.cos(time * 0.2) * 0.02
+
+    // Parallax camera
+    camera.position.x += (mouseX * 0.35 - camera.position.x) * 0.015
+    camera.position.y += (-mouseY * 0.2 - camera.position.y) * 0.015
     camera.lookAt(0, 0, 0)
 
     renderer.render(scene, camera)
