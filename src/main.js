@@ -261,6 +261,101 @@ function initBackground() {
   group.add(heartPoints)
   scene.add(group)
 
+  /* ── Ambient edge particles (fill dark corners) ── */
+  const AMBIENT_COUNT = 150
+  const ambPosArr = new Float32Array(AMBIENT_COUNT * 3)
+  const ambColArr = new Float32Array(AMBIENT_COUNT * 3)
+  const ambSizeArr = new Float32Array(AMBIENT_COUNT)
+  const ambAlphaArr = new Float32Array(AMBIENT_COUNT)
+  const ambPhaseArr = new Float32Array(AMBIENT_COUNT)
+
+  for (let i = 0; i < AMBIENT_COUNT; i++) {
+    const i3 = i * 3
+    // Scatter widely across the full 3D volume, biased toward edges
+    const edgeBias = Math.random()
+    let x, y, z
+    if (edgeBias < 0.6) {
+      // Edge / corner placement
+      const side = Math.floor(Math.random() * 4)
+      const spread = 8 + Math.random() * 12
+      if (side === 0) { x = -spread + Math.random() * 3; y = (Math.random() - 0.5) * 16; }
+      else if (side === 1) { x = spread - Math.random() * 3; y = (Math.random() - 0.5) * 16; }
+      else if (side === 2) { y = -spread + Math.random() * 3; x = (Math.random() - 0.5) * 20; }
+      else { y = spread - Math.random() * 3; x = (Math.random() - 0.5) * 20; }
+      z = -5 - Math.random() * 55
+    } else {
+      // Scattered throughout the volume
+      x = (Math.random() - 0.5) * 24
+      y = (Math.random() - 0.5) * 18
+      z = -2 - Math.random() * 60
+    }
+    ambPosArr[i3] = x
+    ambPosArr[i3 + 1] = y
+    ambPosArr[i3 + 2] = z
+
+    // Dim warm pink or soft gold tones
+    const warm = Math.random()
+    if (warm < 0.5) {
+      ambColArr[i3] = 0.9 + Math.random() * 0.1
+      ambColArr[i3 + 1] = 0.6 + Math.random() * 0.2
+      ambColArr[i3 + 2] = 0.7 + Math.random() * 0.15
+    } else {
+      // Soft champagne gold
+      ambColArr[i3] = 0.95 + Math.random() * 0.05
+      ambColArr[i3 + 1] = 0.85 + Math.random() * 0.1
+      ambColArr[i3 + 2] = 0.6 + Math.random() * 0.15
+    }
+
+    ambSizeArr[i] = 0.3 + Math.random() * 1.2
+    ambAlphaArr[i] = 0.1 + Math.random() * 0.2
+    ambPhaseArr[i] = Math.random() * Math.PI * 2
+  }
+
+  const ambientGeo = new THREE.BufferGeometry()
+  ambientGeo.setAttribute('position', new THREE.BufferAttribute(ambPosArr, 3))
+  ambientGeo.setAttribute('color', new THREE.BufferAttribute(ambColArr, 3))
+  ambientGeo.setAttribute('size', new THREE.BufferAttribute(ambSizeArr, 1))
+  ambientGeo.setAttribute('alpha', new THREE.BufferAttribute(ambAlphaArr, 1))
+
+  const ambientMat = new THREE.ShaderMaterial({
+    uniforms: { uTexture: { value: glowTex } },
+    vertexShader: `
+      attribute float size;
+      attribute float alpha;
+      varying vec3 vColor;
+      varying float vAlpha;
+      varying float vDepth;
+      void main() {
+        vColor = color;
+        vAlpha = alpha;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vDepth = -mv.z;
+        gl_PointSize = size * (120.0 / -mv.z);
+        gl_Position = projectionMatrix * mv;
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D uTexture;
+      varying vec3 vColor;
+      varying float vAlpha;
+      varying float vDepth;
+      void main() {
+        vec4 tex = texture2D(uTexture, gl_PointCoord);
+        float farFade = 1.0 - smoothstep(40.0, 65.0, vDepth);
+        tex.a *= farFade * vAlpha;
+        if (tex.a < 0.005) discard;
+        gl_FragColor = vec4(vColor * tex.rgb * tex.a, tex.a);
+      }
+    `,
+    vertexColors: true,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  })
+
+  const ambientPoints = new THREE.Points(ambientGeo, ambientMat)
+  group.add(ambientPoints)
+
   // Mouse parallax
   let mouseX = 0, mouseY = 0
   window.addEventListener('mousemove', (e) => {
@@ -303,6 +398,17 @@ function initBackground() {
     geometry.attributes.position.needsUpdate = true
     glowGeo.attributes.position.needsUpdate = true
     heartGeo.attributes.position.needsUpdate = true
+
+    // Ambient particles: gentle float + twinkle
+    for (let i = 0; i < AMBIENT_COUNT; i++) {
+      const i3 = i * 3
+      ambPosArr[i3] += Math.sin(time * 0.5 + ambPhaseArr[i]) * 0.003
+      ambPosArr[i3 + 1] += Math.cos(time * 0.4 + ambPhaseArr[i] * 1.3) * 0.002
+      // Twinkle: opacity oscillates between 0.05 and 0.3
+      ambAlphaArr[i] = 0.08 + Math.sin(time * 1.2 + ambPhaseArr[i] * 3.7) * 0.12 + 0.08
+    }
+    ambientGeo.attributes.position.needsUpdate = true
+    ambientGeo.attributes.alpha.needsUpdate = true
 
     // Very slow group rotation for organic drift
     group.rotation.y = Math.sin(time * 0.3) * 0.04

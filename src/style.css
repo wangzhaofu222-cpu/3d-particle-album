@@ -50,7 +50,10 @@ html, body {
   font-size: 15px;
   font-weight: 300;
   letter-spacing: 0.2em;
-  color: rgba(255, 255, 255, 0.85);
+  background: linear-gradient(135deg, #f3e5ab 0%, #d4af37 50%, #f3e5ab 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .brand-heart {
